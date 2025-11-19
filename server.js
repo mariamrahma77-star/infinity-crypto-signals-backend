@@ -14,15 +14,46 @@ const PORT = process.env.PORT || 4000;
 /* ---------------------------------------------
    1. Fetch candles from Binance
 --------------------------------------------- */
+// Robust Binance OHLC fetch with mirror + region fallback
 async function fetchKlines(symbol, interval, limit = 200) {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const response = await fetch(url);
+  // Try official Binance global mirrors first, then US, then main
+  const baseUrls = [
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api.binance.us",
+    "https://api.binance.com"
+  ];
 
-  if (!response.ok) {
-    throw new Error(`Binance API Error: ${response.status} ${response.statusText}`);
+  let lastError;
+
+  for (const base of baseUrls) {
+    const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        // Save reason and try the next mirror
+        lastError = new Error(`Binance API Error from ${base}: ${response.status} ${response.statusText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      // Basic sanity check
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+
+      lastError = new Error(`Empty data from ${base}`);
+    } catch (err) {
+      // Network / DNS / TLS error – keep trying other mirrors
+      lastError = err;
+      continue;
+    }
   }
 
-  return await response.json();
+  // If all mirrors fail, throw the last error we saw
+  throw lastError || new Error("Failed to fetch klines from all Binance endpoints");
 }
 
 /* ---------------------------------------------

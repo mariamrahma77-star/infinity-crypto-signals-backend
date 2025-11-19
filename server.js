@@ -32,4 +32,4 @@ function detectBOS(c) {
   const n = c.length;
   if (n < 3) return null;
 
-  const a = c[n - 3], b = c[n - 2], d
+  const a = c[n - 3], b = c[n - 2], d = c[n - 1];

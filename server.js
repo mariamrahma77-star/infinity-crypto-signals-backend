@@ -20,38 +20,46 @@ async function fetchKlines(symbol, interval, limit = 200) {
     "https://api1.binance.com",
     "https://api2.binance.com",
     "https://api3.binance.com",
-    "https://api.binance.us",
     "https://api.binance.com",
+    "https://api.binance.us"
   ];
 
   let lastError;
 
   for (const base of baseUrls) {
     const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+
     try {
       const response = await fetch(url);
 
       if (!response.ok) {
-        lastError = new Error(
-          `Binance API Error from ${base}: ${response.status} ${response.statusText}`
-        );
+        lastError = new Error(`Binance API Error from ${base}`);
+        console.log(`❌ Failed: ${base} — trying next mirror...`);
         continue;
       }
 
       const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data;
+
+      if (!Array.isArray(data) || data.length === 0) {
+        console.log(`⚠ Empty response from ${base} — fallback continues...`);
+        continue;
       }
 
-      lastError = new Error(`Empty data from ${base}`);
+      // LOG SOURCE ONLY IN RENDER
+      console.log(`✅ Using Binance endpoint: ${base} for ${symbol} (${interval})`);
+
+      return data;
     } catch (err) {
+      console.log(`❌ Network error from ${base}: ${err.message}`);
       lastError = err;
       continue;
     }
   }
 
-  throw lastError || new Error("Failed to fetch klines from all Binance endpoints");
+  // If no source worked
+  throw lastError || new Error("All Binance endpoints failed");
 }
+
 
 /* ---------------------------------------------
    2. SMC Detection Functions

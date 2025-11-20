@@ -16,49 +16,70 @@ const PORT = process.env.PORT || 4000;
 --------------------------------------------- */
 
 async function fetchKlines(symbol, interval, limit = 200) {
-  const baseUrls = [
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api3.binance.com",
-    "https://api.binance.com",
-    "https://api.binance.us"
+  const sources = [
+    {
+      name: "OKX",
+      url: `https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=${interval}&limit=${limit}`,
+      map: (json) =>
+        json.data?.map(k => ({
+          time: Number(k[0]) / 1000,
+          open: Number(k[1]),
+          high: Number(k[2]),
+          low: Number(k[3]),
+          close: Number(k[4]),
+        }))
+    },
+    {
+      name: "BYBIT",
+      url: `https://api.bybit.com/v5/market/kline?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+      map: (json) =>
+        json.result?.list?.map(k => ({
+          time: Number(k.start) / 1000,
+          open: Number(k.open),
+          high: Number(k.high),
+          low: Number(k.low),
+          close: Number(k.close),
+        }))
+    },
+    {
+      name: "BINANCE",
+      url: `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+      map: (json) =>
+        json.map(k => ({
+          time: k[0] / 1000,
+          open: +k[1],
+          high: +k[2],
+          low: +k[3],
+          close: +k[4],
+        }))
+    }
   ];
 
-  let lastError;
+  let lastError = null;
 
-  for (const base of baseUrls) {
-    const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-
+  for (const src of sources) {
     try {
-      const response = await fetch(url);
-
+      const response = await fetch(src.url);
       if (!response.ok) {
-        lastError = new Error(`Binance API Error from ${base}`);
-        console.log(`❌ Failed: ${base} — trying next mirror...`);
+        lastError = new Error(`${src.name} responded ${response.status}`);
         continue;
       }
 
       const data = await response.json();
+      const mapped = src.map(data);
 
-      if (!Array.isArray(data) || data.length === 0) {
-        console.log(`⚠ Empty response from ${base} — fallback continues...`);
-        continue;
+      if (mapped && mapped.length > 0) {
+        return { candles: mapped.reverse(), source: src.name };
       }
-
-      // LOG SOURCE ONLY IN RENDER
-      console.log(`✅ Using Binance endpoint: ${base} for ${symbol} (${interval})`);
-
-      return data;
     } catch (err) {
-      console.log(`❌ Network error from ${base}: ${err.message}`);
       lastError = err;
       continue;
     }
   }
 
-  // If no source worked
-  throw lastError || new Error("All Binance endpoints failed");
+  throw lastError || new Error("All price sources failed");
 }
+
 
 
 /* ---------------------------------------------

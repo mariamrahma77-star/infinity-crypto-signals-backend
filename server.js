@@ -322,33 +322,33 @@ function buildMtf(htf, ltf) {
 
 app.get("/api/mtf-signals", async (req, res) => {
   try {
-    const symbol = (req.query.symbol || "BTCUSDT").toUpperCase();
+    const symbol = req.query.symbol || "BTCUSDT";
     const htf = req.query.htf || "1h";
     const ltf = req.query.ltf || "15m";
 
-    const [htfData, ltfData] = await Promise.all([
-      fetchKlines(symbol, htf, 200),
-      fetchKlines(symbol, ltf, 300),
-    ]);
+    const htfData = await fetchKlines(symbol, htf, 200);
+    const ltfData = await fetchKlines(symbol, ltf, 300);
 
-    const htfSMC = buildSMCSignals(htfData);
-    const ltfSMC = buildSMCSignals(ltfData);
+    const htfSMC = buildSMCSignals(htfData.candles);
+    const ltfSMC = buildSMCSignals(ltfData.candles);
+
     const mtf = buildMtf(htfSMC, ltfSMC);
 
     res.json({
       symbol,
       htfInterval: htf,
       ltfInterval: ltf,
+      dataSource: `${htfData.source}/${ltfData.source}`,
       htf: htfSMC,
       ltf: ltfSMC,
       mtfSignals: mtf,
-      generatedAt: Date.now(),
+      generatedAt: Date.now()
     });
   } catch (err) {
-    console.error("Error in /api/mtf-signals:", err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 /* ---------------------------------------------
    6. Placeholder backtest endpoint
